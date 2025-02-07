@@ -21,6 +21,7 @@ def send_data_to_support_channel(data: dict):
 
     phone = data.get('phone')  # Используем номер из переданных данных
     anydesk_number = data.get('anydesk_number', 'Не указан')  # Получаем номер AnyDesk, если он есть
+    text_description = data.get('text_description', 'Не указано')
 
     message = f"""
     Новая заявка в техническую поддержку:
@@ -29,6 +30,7 @@ def send_data_to_support_channel(data: dict):
     Номер AnyDesk: {anydesk_number}
     Категория проблемы: {data['problem_type']}
     Подкатегория: {data.get('sub_problem_type', 'Не указана')}
+    Описание проблемы: {text_description}
     """
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"

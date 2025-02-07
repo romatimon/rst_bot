@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 
 # Константы для состояний
-NAME, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK = range(6)
+NAME, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION = range(7)
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -64,6 +64,10 @@ def end(update: Update, context: CallbackContext) -> int:
     """Завершает общение с ботом."""
     user_id = update.message.chat.id
     logging.info(f"Пользователь {user_id} завершил разговор.")
+
+    if user_id in user_data:
+        del user_data[user_id]
+
     update.message.reply_text('Спасибо за обращение. Если у Вас возникнут дополнительные вопросы или потребуется помощь, пожалуйста, запустите бот заново из меню или пришлите сообщение «\start». Хорошего дня.')
     return ConversationHandler.END
 
@@ -240,13 +244,20 @@ def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
     user_data[user_id]['sub_problem_type'] = sub_problem_type
 
     if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
-        query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»')
+        query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»):')
         return ANYDESK
+    
+    elif sub_problem_type == 'Другое':
+        query.edit_message_text(text='Пожалуйста, опишите проблему в свободной форме:')
+        return TEXT_DESCRIPTION
 
     # Добавляем chat_id в данные, которые будут отправлены
     user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
 
     send_data_to_support_channel(user_data[user_id])
+
+    del user_data[user_id]
+
     query.edit_message_text(text='Спасибо. Данные успешно отправлены в техническую поддержку. В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
 
@@ -263,6 +274,24 @@ def get_anydesk_number(update: Update, context: CallbackContext) -> int:
     user_data[user_id]['chat_id'] = user_id
 
     send_data_to_support_channel(user_data[user_id])
+
+    del user_data[user_id]
+
+    update.message.reply_text('Спасибо. Данные успешно отправлены в техническую поддержку. В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
+    return ConversationHandler.END
+
+def handle_text_description(update: Update, context: CallbackContext) -> int:
+    user_id = update.message.chat.id
+    text_description = update.message.text
+    logging.info(f"Пользователь {user_id} ввел описание проблемы: {text_description}")
+
+    user_data[user_id]['text_description'] = text_description
+    user_data[user_id]['chat_id'] = user_id
+
+    send_data_to_support_channel(user_data[user_id])
+
+    del user_data[user_id]
+    
     update.message.reply_text('Спасибо. Данные успешно отправлены в техническую поддержку. В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
 
@@ -277,7 +306,8 @@ conv_handler = ConversationHandler(
             CallbackQueryHandler(get_sub_problem_type, pattern='^(?!back_to_menu).*'),
             CallbackQueryHandler(handle_back, pattern='^back_to_menu$')
         ],
-        ANYDESK: [MessageHandler(Filters.text & ~Filters.command, get_anydesk_number)],  # Новое состояние
+        ANYDESK: [MessageHandler(Filters.text & ~Filters.command, get_anydesk_number)],
+        TEXT_DESCRIPTION: [MessageHandler(Filters.text & ~Filters.command, handle_text_description)],
     },
     fallbacks=[CommandHandler('end', end)],
 )
