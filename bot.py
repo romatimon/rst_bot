@@ -45,11 +45,11 @@ def start(update: Update, context: CallbackContext) -> int:
         # Создаем кнопки для подтверждения
         keyboard = [
             [InlineKeyboardButton("Да, все верно", callback_data='confirm_yes')],
-            [InlineKeyboardButton("Нет, это не тот", callback_data='confirm_no')]
+            [InlineKeyboardButton("Нет, не верно", callback_data='confirm_no')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         update.message.reply_text(
-            f'Здравствуйте, {user_name}! Рад Вас снова видеть! 😊 Ваш номер телефона: {existing_phone}. Верно?',
+            f'Здравствуйте, {user_name}. Вы обратились в службу технической поддержки АО «РОСТЕСТ». Ваш номер телефона: {existing_phone}. Верно?',
             reply_markup=reply_markup
         )
 
@@ -57,14 +57,14 @@ def start(update: Update, context: CallbackContext) -> int:
         return CONFIRM_PHONE
     else:
         # Новый пользователь, запрашиваем имя
-        update.message.reply_text('Здравствуйте! 👋 Спасибо, что включили меня! Как Вас зовут? Напишите свое имя и фамилию:')
+        update.message.reply_text('Добрый день. Вы обратились в службу технической поддержки АО «РОСТЕСТ». Пожалуйста, напишите имя и фамилию:')
         return NAME
     
 def end(update: Update, context: CallbackContext) -> int:
     """Завершает общение с ботом."""
     user_id = update.message.chat.id
     logging.info(f"Пользователь {user_id} завершил разговор.")
-    update.message.reply_text('Благодарю Вас за общение! Если у Вас возникнут дополнительные вопросы или потребуется помощь, пожалуйста, не стесняйтесь обращаться. Мы всегда рады помочь! 😊')
+    update.message.reply_text('Спасибо за обращение. Если у Вас возникнут дополнительные вопросы или потребуется помощь, пожалуйста, запустите бот заново из меню или пришлите сообщение «\start». Хорошего дня.')
     return ConversationHandler.END
 
 def get_name(update: Update, context: CallbackContext) -> int:
@@ -77,7 +77,7 @@ def get_name(update: Update, context: CallbackContext) -> int:
     user_data[user_id] = {'name': name, 'chat_id': user_id}  # Записываем данные в словарь
 
     # Запрашиваем номер телефона
-    update.message.reply_text('Отлично! Теперь, пожалуйста, введите свой номер телефона в формате +7 XXXXXXXXXX (12 цифр).')
+    update.message.reply_text('Спасибо. Введите номер телефона в формате +7 XXXXXXXXXX (12 цифр):')
     return PHONE
 
 def is_valid_phone(phone: str) -> bool:
@@ -129,7 +129,7 @@ def handle_confirmation_callback(update: Update, context: CallbackContext) -> in
         return PROBLEM_TYPE
     elif query.data == 'confirm_no':
         logging.info(f"Пользователь {user_id} отклонил подтверждение телефона.")
-        query.edit_message_text(text='Пожалуйста, введите новый номер телефона, чтобы мы могли продолжить!')
+        query.edit_message_text(text='Пожалуйста, введите номер телефона для связи, в формате +7 XXXXXXXXXX (12 цифр).')
         return PHONE
     
 def show_problem_type_menu(update: Update, text: str = 'В чем у Вас возникла проблема? Выберите, пожалуйста, категорию:'):
@@ -175,7 +175,6 @@ def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
             "Не включается",
             "Медленная работа ПК",
             "Не работает интернет",
-            "Замена периферии",
             "Другое"
         ],
         'phone': [
@@ -186,7 +185,6 @@ def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
         ],
         'printer': [
             "Не печатает/ошибка при печати",
-            "Проблема с подключением",
             "Замена картриджа",
             "Другое"
         ],
@@ -242,14 +240,14 @@ def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
     user_data[user_id]['sub_problem_type'] = sub_problem_type
 
     if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
-        query.edit_message_text(text='Пожалуйста, введите ваш 9-значный код AnyDesk:')
+        query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»')
         return ANYDESK
 
     # Добавляем chat_id в данные, которые будут отправлены
     user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
 
     send_data_to_support_channel(user_data[user_id])
-    query.edit_message_text(text='Спасибо! 🙏 Ваши данные успешно отправлены в техподдержку. Мои коллеги скоро свяжутся с Вами для решения проблемы. 😊')
+    query.edit_message_text(text='Спасибо. Данные успешно отправлены в техническую поддержку. В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
 
 # Создание базы данных пользователей
