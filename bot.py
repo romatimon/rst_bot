@@ -263,7 +263,7 @@ def get_anydesk_number(update: Update, context: CallbackContext) -> int:
     user_data[user_id]['chat_id'] = user_id
 
     send_data_to_support_channel(user_data[user_id])
-    update.message.reply_text('Спасибо! 🙏 Ваши данные успешно отправлены в техподдержку. Мои коллеги скоро свяжутся с Вами для решения проблемы. 😊')
+    update.message.reply_text('Спасибо. Данные успешно отправлены в техническую поддержку. В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
 
 conv_handler = ConversationHandler(
