@@ -1,17 +1,18 @@
-import logging
-import os
 import requests
-from dotenv import load_dotenv
 
-from db import get_user_by_chat_id
+from config import TELEGRAM_TOKEN, TARGET_CHAT_ID
+from database import get_user_by_chat_id
+from logging_config import logging
 
-load_dotenv()
-
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TARGET_CHAT_ID = os.getenv('TARGET_CHAT_ID')
 
 def send_data_to_support_channel(data: dict):
-    """Отправляет данные пользователя в канал поддержки."""
+    """
+    Отправляет данные пользователя в канал технической поддержки.
+
+    :param data: Словарь с данными пользователя. Обязательные ключи: chat_id, problem_type.
+                 Дополнительные ключи: name, phone, anydesk_number, sub_problem_type, text_description.
+    :raises: Логирует ошибку, если отправка данных не удалась.
+    """
     user_id = data['chat_id']
     name = data.get('name')
 
@@ -23,17 +24,18 @@ def send_data_to_support_channel(data: dict):
     anydesk_number = data.get('anydesk_number', 'Не указан')  # Получаем номер AnyDesk, если он есть
     text_description = data.get('text_description', 'Не указано')
 
-    message = f"""
-    Новая заявка в техническую поддержку:
-    Сотрудник: {name}
-    Телефон: {phone}
-    Номер AnyDesk: {anydesk_number}
-    Категория проблемы: {data['problem_type']}
-    Подкатегория: {data.get('sub_problem_type', 'Не указана')}
-    Описание проблемы: {text_description}
-    """
+    message = (
+        f"Новая заявка в техническую поддержку:\n"
+        f"Сотрудник: {name}\n"
+        f"Телефон: {phone}\n"
+        f"Номер AnyDesk: {anydesk_number}\n"
+        f"Категория проблемы: {data['problem_type']}\n"
+        f"Подкатегория: {data.get('sub_problem_type', 'Не указана')}\n"
+        f"Описание проблемы: {text_description}"
+    )
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    
     params = {
         "chat_id": TARGET_CHAT_ID,
         "text": message,
@@ -45,3 +47,4 @@ def send_data_to_support_channel(data: dict):
         logging.info("Данные успешно отправлены в канал поддержки.")
     except Exception as e:
         logging.error(f"Ошибка при отправке сообщения: {e}")
+
