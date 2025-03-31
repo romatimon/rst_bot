@@ -3,8 +3,8 @@ import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackContext
 
-from config import NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION, user_list
-from database import create_user_db, get_user_by_chat_id, save_user_to_db
+from config import NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION
+from database import create_user_db, get_user_by_chat_id, save_user_to_db, get_employees_db
 from email_service import send_code_to_email
 from send_support_chanel import send_data_to_support_channel
 from logging_config import logging
@@ -111,28 +111,35 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     # Отменяем задачу, если пользователь ввел имя
     context.job_queue.stop()
 
-    name_upper = name.upper()
     name_parts = name.split()
-    
+
     if len(name_parts) < 2:
-        update.message.reply_text('Пожалуйста, напишите полное имя и фамилию:')
+        update.message.reply_text('Пожалуйста, напишите полное имя, а затем фамилию:')
         return NAME
-    
-    if name_upper not in user_list.keys():
-        update.message.reply_text('Вы не являетесь сотрудником АО "РОСТЕСТ". Всего доброго.')
+
+    name_upper = name.upper()
+
+   # Получаем список сотрудников из базы данных
+    employees = get_employees_db(name_upper)
+
+    if not employees:
+        update.message.reply_text('Пожалуйста, проверьте и введите свои данные правильно. Всего доброго.')
         logging.warning(f"Пользователь {user_id} не найден в списке сотрудников.")
         return ConversationHandler.END
     
-    else:
-        logging.info(f"Пользователь {user_id} найден в списке сотрудников.")
+    email = employees[2]
+    
+    logging.info(f"Пользователь {user_id} найден в списке сотрудников.")
 
-        code = random.randint(1000, 9999)
-        user_data[user_id] = {'name': name, 'chat_id': user_id, 'code': code} 
+    # Генерация кода подтверждения
+    code = random.randint(1000, 9999)
+    user_data[user_id] = {'name': name, 'chat_id': user_id, 'code': code} 
 
-        send_code_to_email(user_list[name_upper], code)
+    # Отправка кода на электронную почту
+    send_code_to_email(email, code)
 
-        update.message.reply_text('На Вашу электронную почту был направлен 4-значный код. Пожалуйста, введите его:')
-        return CODE
+    update.message.reply_text('На Вашу электронную почту был направлен 4-значный код. Пожалуйста, введите его:')
+    return CODE
 
  
 def is_valid_code(code: str) -> bool:

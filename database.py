@@ -53,3 +53,21 @@ def save_user_to_db(chat_id, name, phone):
     """, (chat_id, name, phone))
     conn.commit()
     conn.close()
+
+def get_employees_db(name):
+    """
+    Получает информацию о сотрудниках из базы данных по полному имени.
+
+    :param full_name: Полное имя сотрудника.
+    :return: Кортеж с данными сотрудника или None, если не найден.
+    """
+    conn = sqlite3.connect('employees.db')
+    cursor = conn.cursor()
+    
+    # Выполнение запроса с использованием параметризованного SQL
+    cursor.execute("SELECT * FROM employees WHERE full_name = ?", (name,))
+    
+    # Получение одного результата
+    result = cursor.fetchone()
+    conn.close()
+    return result
