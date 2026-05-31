@@ -37,7 +37,9 @@ def send_data_to_support_channel(data: dict):
         f"Описание проблемы: {text_description}"
     )
 
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    # Используем тот же base_url, что и для бота
+    base_url = TELEGRAM_API_BASE_URL.rstrip('/')
+    url = f"{base_url}/bot{TELEGRAM_TOKEN}/sendMessage"
     
     params = {
         "chat_id": TARGET_CHAT_ID,
