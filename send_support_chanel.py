@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 from config import TELEGRAM_TOKEN, TARGET_CHAT_ID
