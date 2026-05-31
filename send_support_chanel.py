@@ -5,6 +5,9 @@ from database import get_user_by_chat_id
 from logging_config import logging
 
 
+TELEGRAM_API_BASE_URL = os.getenv('TELEGRAM_API_BASE_URL', 'https://api.telegram.org')
+
+
 def send_data_to_support_channel(data: dict):
     """
     Отправляет данные пользователя в канал технической поддержки.
