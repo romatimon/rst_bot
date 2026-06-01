@@ -50,8 +50,16 @@ def send_data_to_support_channel(data: dict):
     }
 
     try:
-        requests.post(url, params=params)
-        logging.info("Данные успешно отправлены в канал поддержки.")
+        response = requests.post(url, params=params, timeout=30)
+        
+        # Логируем статус и ответ Telegram
+        logging.info(f"Статус ответа: {response.status_code}")
+        logging.info(f"Тело ответа: {response.text}")
+        
+        if response.status_code == 200:
+            logging.info("✅ Данные успешно отправлены в канал поддержки.")
+        else:
+            logging.error(f"❌ Telegram вернул ошибку: {response.status_code} - {response.text}")
+            
     except Exception as e:
-        logging.error(f"Ошибка при отправке сообщения: {e}")
-
+        logging.error(f"❌ Ошибка при отправке сообщения: {e}")
