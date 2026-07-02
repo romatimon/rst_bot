@@ -7,7 +7,7 @@ from database import get_user_by_chat_id
 from logging_config import logging
 
 
-TELEGRAM_API_BASE_URL = os.getenv('TELEGRAM_API_BASE_URL', 'https://api.telegram.org')
+TELEGRAM_API_BASE_URL = 'https://api.telegram.org'
 
 
 def send_data_to_support_channel(data: dict):
@@ -39,9 +39,8 @@ def send_data_to_support_channel(data: dict):
         f"Описание проблемы: {text_description}"
     )
 
-    # Используем тот же base_url, что и для бота
-    base_url = TELEGRAM_API_BASE_URL.rstrip('/')
-    url = f"{base_url}/bot{TELEGRAM_TOKEN}/sendMessage"
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     
     params = {
         "chat_id": TARGET_CHAT_ID,
