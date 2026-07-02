@@ -19,7 +19,7 @@ from handlers import (
 from config import TELEGRAM_TOKEN, NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION
 from logging_config import logging
 
-BASE_URL = os.getenv('TELEGRAM_API_BASE_URL', 'https://api.telegram.org')
+BASE_URL = 'https://api.telegram.org'
 
 
 def main():
