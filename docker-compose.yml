@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  bot:
+    image: rtimonin569/rst_bot:latest
+    container_name: rst_bot_container
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_TOKEN=8154300397:AAFYWNwOCB3TzpxP1XvmRNKsQIKfPyfnmik
+      - TARGET_CHAT_ID=-1002171291966
+      - FROM_EMAIL=rost3st@yandex.ru
+      - EMAIL_PASSWORD=puhtzooetirgntaf
+      - TELEGRAM_API_BASE_URL=https://api.telegram.org
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - timoninbot_data:/data
+    networks:
+      - bot_network
+
+volumes:
+  timoninbot_data:
+    external: true
+    name: timoninbot_data
+
+networks:
+  bot_network:
+    driver: bridge

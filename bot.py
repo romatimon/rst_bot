@@ -19,15 +19,13 @@ from handlers import (
 from config import TELEGRAM_TOKEN, NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION
 from logging_config import logging
 
-BASE_URL = 'https://api.telegram.org'
-
 
 def main():
     """
     Запускает Telegram-бота с использованием ConversationHandler.
     Бот обрабатывает команду /start и управляет диалогом с пользователем через состояния.
     """
-    updater = Updater(TELEGRAM_TOKEN, base_url=BASE_URL)
+    updater = Updater(TELEGRAM_TOKEN)
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -63,8 +61,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-

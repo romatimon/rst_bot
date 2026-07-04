@@ -1,18 +1,12 @@
-FROM python:3.9
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Копируем requirements.txt первым (для кэширования)
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Устанавливаем зависимости с официального PyPI
-# Увеличиваем таймауты и добавляем повторы для обхода блокировок
-RUN pip install --no-cache-dir \
-    --default-timeout=100 \
-    --retries=5 \
-    -r requirements.txt
-
-# Копируем остальной код
 COPY . .
 
-CMD ["python", "bot.py"]
+RUN mkdir -p /data
+
+CMD ["python", "-u", "bot.py"]
