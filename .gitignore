@@ -1,12 +1,8 @@
-# Environments
 .env
-.venv
-env/
-venv/
-
-.log
-log.log
-
-.db
-
 __pycache__/
+*.pyc
+*.db
+*.log
+/data/
+.idea/
+.vscode/

@@ -1,12 +1,13 @@
 import sqlite3
 
+# Путь к базе данных в томе
+USERS_DB = '/data/users.db'
+EMPLOYEES_DB = '/data/employees.db'
+
 
 def create_user_db():
-    """
-    Создает базу данных пользователей, если она не существует.
-    Создает таблицу `users` с полями: id, chat_id, name, phone.
-    """
-    conn = sqlite3.connect('/data/users.db')
+    """Создает базу данных пользователей."""
+    conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -19,31 +20,20 @@ def create_user_db():
     conn.commit()
     conn.close()
 
-def get_user_by_chat_id(chat_id):
-    """
-    Возвращает информацию о пользователе по его chat_id из базы данных.
 
-    :param chat_id: Уникальный идентификатор чата пользователя.
-    :return: Кортеж с данными пользователя (id, chat_id, name, phone) или None, если пользователь не найден.
-    """
-    conn = sqlite3.connect('/data/users.db')
+def get_user_by_chat_id(chat_id):
+    """Возвращает пользователя по chat_id."""
+    conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE chat_id = ?", (chat_id,))
     result = cursor.fetchone()
     conn.close()
-    return result # (1, 1996846711, 'Роман Тимонин', '+79250411559')
+    return result
+
 
 def save_user_to_db(chat_id, name, phone):
-    """
-    Сохраняет данные пользователя в базу данных.
-
-    Если пользователь с таким chat_id уже существует, обновляет его данные.
-
-    :param chat_id: Уникальный идентификатор чата пользователя.
-    :param name: Имя пользователя.
-    :param phone: Номер телефона пользователя.
-    """
-    conn = sqlite3.connect('/data/users.db')
+    """Сохраняет или обновляет пользователя."""
+    conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO users (chat_id, name, phone) 
@@ -54,20 +44,48 @@ def save_user_to_db(chat_id, name, phone):
     conn.commit()
     conn.close()
 
+
 def get_employees_db(name):
     """
-    Получает информацию о сотрудниках из базы данных по полному имени.
-
-    :param full_name: Полное имя сотрудника.
-    :return: Кортеж с данными сотрудника или None, если не найден.
+    Возвращает сотрудника по полному имени.
+    Регистронезависимый поиск + поиск по частям (без отчества).
     """
-    conn = sqlite3.connect('employees.db')
+    conn = sqlite3.connect(EMPLOYEES_DB)
     cursor = conn.cursor()
     
-    # Выполнение запроса с использованием параметризованного SQL
-    cursor.execute("SELECT * FROM employees WHERE full_name = ?", (name,))
+    # Приводим к верхнему регистру
+    name_upper = name.upper().strip()
     
-    # Получение одного результата
+    # 1. Пробуем точное совпадение
+    cursor.execute("SELECT * FROM employees WHERE full_name = ?", (name_upper,))
     result = cursor.fetchone()
+    
+    # 2. Если не найдено - пробуем по частям (фамилия + имя)
+    if not result:
+        parts = name_upper.split()
+        if len(parts) >= 2:
+            # Ищем по фамилии (первое слово) и имени (второе слово)
+            # Это позволяет найти "ТИМОНИН РОМАН" в "ТИМОНИН РОМАН ЮРЬЕВИЧ"
+            cursor.execute("""
+                SELECT * FROM employees 
+                WHERE full_name LIKE ? 
+                AND full_name LIKE ?
+            """, (f'%{parts[0]}%', f'%{parts[1]}%'))
+            result = cursor.fetchone()
+    
+    # 3. Если всё ещё не найдено - пробуем по любому слову
+    if not result:
+        parts = name_upper.split()
+        if len(parts) >= 1:
+            for part in parts:
+                cursor.execute("SELECT * FROM employees WHERE full_name LIKE ?", (f'%{part}%',))
+                result = cursor.fetchone()
+                if result:
+                    break
+    
     conn.close()
     return result
+
+
+# Создаем БД при импорте
+create_user_db()

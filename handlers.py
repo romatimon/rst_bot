@@ -15,6 +15,24 @@ create_user_db() # Создаем базу данных при импорте м
 user_data = {}  # Словарь для хранения временных данных пользователя
 
 
+def get_first_name_from_full(full_name):
+    """
+    Из полного ФИО возвращает только имя.
+    Пример: "ТИМОНИН РОМАН ЮРЬЕВИЧ" → "Роман"
+    """
+    if not full_name:
+        return None
+    
+    parts = full_name.strip().split()
+    
+    if len(parts) >= 3:
+        return parts[1].title()  # Фамилия Имя Отчество → Имя
+    elif len(parts) == 2:
+        return parts[1].title()  # Фамилия Имя → Имя
+    else:
+        return full_name.title()
+
+
 def start(update: Update, context: CallbackContext) -> int:
     """
     Начинает разговор с пользователем и проверяет, существует ли он в базе данных.
@@ -130,10 +148,15 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     email = employees[2]
     
     logging.info(f"Пользователь {user_id} найден в списке сотрудников.")
-
+ы
     # Генерация кода подтверждения
     code = random.randint(1000, 9999)
-    user_data[user_id] = {'name': name, 'chat_id': user_id, 'code': code} 
+
+    # Получаем полное имя из БД сотрудников
+    full_name_from_db = employees[1]  # "ТИМОНИН РОМАН ЮРЬЕВИЧ"
+    first_name = get_first_name_from_full(full_name_from_db)  # "Роман"
+
+    user_data[user_id] = {'name': first_name, 'chat_id': user_id, 'code': code}
 
     # Отправка кода на электронную почту
     send_code_to_email(email, code)
