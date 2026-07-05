@@ -1,6 +1,7 @@
 import random
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ConversationHandler, CallbackContext
 
 from config import NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION
@@ -75,21 +76,9 @@ async def start(update: Update, context: CallbackContext) -> int:
         # Новый пользователь, запрашиваем имя
         await update.message.reply_text('Добрый день! Вы обратились в службу технической поддержки АО «РОСТЕСТ». '
                                   'Пожалуйста, напишите ваше полное имя и фамилию:')
-        # Сохраняем задание для возможности его отмены
-        job = context.job_queue.run_once(send_notification, 300, context=user_id, name=str(user_id))
-        user_data[user_id] = {'job': job}  # Сохраняем ссылку на задание
+        user_data[user_id] = {}  # Инициализируем пустой словарь для пользователя
         return NAME
     
-
-def send_notification(context: CallbackContext) -> None:
-    """
-    Отправляет уведомление пользователю с предложением завершить разговор.
-
-    :param context: Объект CallbackContext из python-telegram-bot.
-    """
-    user_id = context.job.context
-    context.application.bot.send_message(chat_id=user_id, text='Если Вы не хотите продолжать, введите /end для завершения разговора.')
-
 
 async def end(update: Update, context: CallbackContext) -> int:
     """
@@ -127,11 +116,6 @@ async def handle_user_name_input(update: Update, context: CallbackContext) -> in
     # Проверка на команду "end"
     if name.lower() == 'end':
         return await end(update, context)
-
-    # Отменяем задачу отправки уведомления, если пользователь ввел имя
-    if user_id in user_data and 'job' in user_data[user_id]:
-        # Отменяем явно сохраненное задание
-        user_data[user_id]['job'].schedule_removal()
 
     name_parts = name.split()
 
@@ -371,11 +355,15 @@ async def show_sub_problem_type_menu(update: Update, context: CallbackContext) -
     keyboard.append([InlineKeyboardButton("Назад", callback_data='back_to_menu')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.callback_query.edit_message_text('Выберите подкатегорию проблемы:', reply_markup=reply_markup)
+    # Обработка редактирования сообщения с обработкой ошибки "Message is not modified"
+    try:
+        await update.callback_query.edit_message_text('Выберите подкатегорию проблемы:', reply_markup=reply_markup)
+    except BadRequest as e:
+        if 'Message is not modified' not in str(e):
+            raise
+        # Если сообщение не изменилось, просто продолжаем
+        logging.debug(f"Сообщение уже имело это содержимое для пользователя {user_id}")
 
-    # Сохраняем задание для возможности его отмены
-    job = context.job_queue.run_once(send_notification, 300, context=user_id, name=str(user_id))
-    user_data[user_id]['job'] = job  # Обновляем сохраненное задание
     return SUB_PROBLEM_TYPE
 
 
@@ -443,24 +431,31 @@ async def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
 
     logging.info(f"Пользователь {user_id} выбрал подкатегорию проблемы: {sub_problem_type}")
 
-    if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
-        await query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»):')
-        return ANYDESK
+    try:
+        if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
+            await query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»):')
+            return ANYDESK
+        
+        elif sub_problem_type in ['Другое', 'Выдача доступа']:
+            await query.edit_message_text(text='Пожалуйста, опишите проблему в свободной форме:')
+            return TEXT_DESCRIPTION
+
+        # Добавляем chat_id в данные, которые будут отправлены
+        user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
+
+        send_data_to_support_channel(user_data[user_id])
+
+        del user_data[user_id]
+
+        await query.edit_message_text(text='Данные успешно отправлены в техническую поддержку. '
+                                'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
+        return ConversationHandler.END
     
-    elif sub_problem_type in ['Другое', 'Выдача доступа']:
-        await query.edit_message_text(text='Пожалуйста, опишите проблему в свободной форме:')
-        return TEXT_DESCRIPTION
-
-    # Добавляем chat_id в данные, которые будут отправлены
-    user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
-
-    send_data_to_support_channel(user_data[user_id])
-
-    del user_data[user_id]
-
-    await query.edit_message_text(text='Данные успешно отправлены в техническую поддержку. '
-                            'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
-    return ConversationHandler.END
+    except BadRequest as e:
+        if 'Message is not modified' in str(e):
+            logging.warning(f"Сообщение уже имело это содержимое для пользователя {user_id}")
+            return context.user_data.get('current_state', SUB_PROBLEM_TYPE)
+        raise
 
 
 async def get_anydesk_number(update: Update, context: CallbackContext) -> int:
