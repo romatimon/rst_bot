@@ -1,18 +1,17 @@
 import logging
 import sys
 import os
+from config import LOG_DIR
 
 # Создаем папку для логов если её нет
-log_dir = '/data'
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
 
-# Настройка логирования И в файл, И в консоль
+# Настройка логирования и в файл, и в консоль
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(sys.stdout),  # В консоль
-        logging.FileHandler('/data/log.log', encoding='utf-8')  # В файл
+        logging.FileHandler(os.path.join(LOG_DIR, 'bot.log'), encoding='utf-8')  # В файл
     ]
 )

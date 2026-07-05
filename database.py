@@ -1,12 +1,18 @@
 import sqlite3
+import os
+from config import USERS_DB_PATH, EMPLOYEES_DB_PATH
 
-# Путь к базе данных в томе
-USERS_DB = '/data/users.db'
-EMPLOYEES_DB = '/data/employees.db'
+# Пути к базам данных
+USERS_DB = USERS_DB_PATH
+EMPLOYEES_DB = EMPLOYEES_DB_PATH
+
+# Убеждаемся, что директория существует
+os.makedirs(os.path.dirname(USERS_DB), exist_ok=True)
+os.makedirs(os.path.dirname(EMPLOYEES_DB), exist_ok=True)
 
 
 def create_user_db():
-    """Создает базу данных пользователей."""
+    """Создает базу данных пользователей с индексами."""
     conn = sqlite3.connect(USERS_DB)
     cursor = conn.cursor()
     cursor.execute('''
@@ -17,6 +23,9 @@ def create_user_db():
             phone TEXT UNIQUE NOT NULL
         )
     ''')
+    # Добавляем индексы для быстрого поиска
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_chat_id ON users(chat_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_phone ON users(phone)')
     conn.commit()
     conn.close()
 

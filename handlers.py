@@ -75,7 +75,9 @@ def start(update: Update, context: CallbackContext) -> int:
         # Новый пользователь, запрашиваем имя
         update.message.reply_text('Добрый день! Вы обратились в службу технической поддержки АО «РОСТЕСТ». '
                                   'Пожалуйста, напишите ваше полное имя и фамилию:')
-        context.job_queue.run_once(send_notification, 300, context=user_id)
+        # Сохраняем задание для возможности его отмены
+        job = context.job_queue.run_once(send_notification, 300, context=user_id, name=str(user_id))
+        user_data[user_id] = {'job': job}  # Сохраняем ссылку на задание
         return NAME
     
 
@@ -126,8 +128,10 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     if name.lower() == 'end':
         return end(update, context)
 
-    # Отменяем задачу, если пользователь ввел имя
-    context.job_queue.stop()
+    # Отменяем задачу отправки уведомления, если пользователь ввел имя
+    if user_id in user_data and 'job' in user_data[user_id]:
+        # Отменяем явно сохраненное задание
+        user_data[user_id]['job'].schedule_removal()
 
     name_parts = name.split()
 
@@ -148,7 +152,7 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     email = employees[2]
     
     logging.info(f"Пользователь {user_id} найден в списке сотрудников.")
-ы
+
     # Генерация кода подтверждения
     code = random.randint(1000, 9999)
 
@@ -197,7 +201,7 @@ def code_verification(update: Update, context: CallbackContext) -> int:
     user_code = int(from_user_code)
 
     if user_data[user_id]['code'] != user_code:
-        update.message.reply_text('К сожалению, введенный вами код неверный. Пожалуйста, проверьте его и введите снова.:')
+        update.message.reply_text('К сожалению, введенный вами код неверный. Пожалуйста, проверьте его и введите снова.')
         logging.warning(f"Пользователь {user_id} ввел неверный код.")
         return CODE
     
@@ -369,7 +373,9 @@ def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
 
     update.callback_query.edit_message_text('Выберите подкатегорию проблемы:', reply_markup=reply_markup)
 
-    context.job_queue.run_once(send_notification, 300, context=user_id)
+    # Сохраняем задание для возможности его отмены
+    job = context.job_queue.run_once(send_notification, 300, context=user_id, name=str(user_id))
+    user_data[user_id]['job'] = job  # Обновляем сохраненное задание
     return SUB_PROBLEM_TYPE
 
 

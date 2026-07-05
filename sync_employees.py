@@ -6,9 +6,10 @@ import openpyxl
 import os
 import re
 from datetime import datetime
+from config import EMPLOYEES_DB_PATH
 
-DB_PATH = '/data/employees.db'
-EXCEL_PATH = '/data/phonebook.xlsx'
+DB_PATH = EMPLOYEES_DB_PATH
+EXCEL_PATH = os.getenv('EXCEL_PATH', '/data/phonebook.xlsx')
 
 def clean_name(name):
     if not name:
@@ -75,6 +76,10 @@ def sync_from_excel():
             email TEXT UNIQUE NOT NULL
         )
     ''')
+    
+    # Добавляем индексы для быстрого поиска
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_full_name ON employees(full_name)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_email ON employees(email)')
 
     # Очищаем таблицу
     cursor.execute("DELETE FROM employees")
