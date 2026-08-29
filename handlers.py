@@ -1,6 +1,7 @@
 import random
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import ConversationHandler, CallbackContext
 
 from config import NAME, CODE, PHONE, CONFIRM_PHONE, PROBLEM_TYPE, SUB_PROBLEM_TYPE, ANYDESK, TEXT_DESCRIPTION
@@ -15,7 +16,25 @@ create_user_db() # Создаем базу данных при импорте м
 user_data = {}  # Словарь для хранения временных данных пользователя
 
 
-def start(update: Update, context: CallbackContext) -> int:
+def get_first_name_from_full(full_name):
+    """
+    Из полного ФИО возвращает только имя.
+    Пример: "ТИМОНИН РОМАН ЮРЬЕВИЧ" → "Роман"
+    """
+    if not full_name:
+        return None
+    
+    parts = full_name.strip().split()
+    
+    if len(parts) >= 3:
+        return parts[1].title()  # Фамилия Имя Отчество → Имя
+    elif len(parts) == 2:
+        return parts[1].title()  # Фамилия Имя → Имя
+    else:
+        return full_name.title()
+
+
+async def start(update: Update, context: CallbackContext) -> int:
     """
     Начинает разговор с пользователем и проверяет, существует ли он в базе данных.
 
@@ -44,7 +63,7 @@ def start(update: Update, context: CallbackContext) -> int:
             [InlineKeyboardButton("Нет, не верно", callback_data='confirm_no')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        update.message.reply_text(
+        await update.message.reply_text(
             f'Здравствуйте, {user_name}. Вы обратились в службу технической поддержки АО «РОСТЕСТ». '
             f'Ваш номер телефона: {existing_phone}. Верно?',
             reply_markup=reply_markup
@@ -55,23 +74,13 @@ def start(update: Update, context: CallbackContext) -> int:
     
     else:
         # Новый пользователь, запрашиваем имя
-        update.message.reply_text('Добрый день! Вы обратились в службу технической поддержки АО «РОСТЕСТ». '
+        await update.message.reply_text('Добрый день! Вы обратились в службу технической поддержки АО «РОСТЕСТ». '
                                   'Пожалуйста, напишите ваше полное имя и фамилию:')
-        context.job_queue.run_once(send_notification, 300, context=user_id)
+        user_data[user_id] = {}  # Инициализируем пустой словарь для пользователя
         return NAME
     
 
-def send_notification(context: CallbackContext) -> None:
-    """
-    Отправляет уведомление пользователю с предложением завершить разговор.
-
-    :param context: Объект CallbackContext из python-telegram-bot.
-    """
-    user_id = context.job.context
-    context.bot.send_message(chat_id=user_id, text='Если Вы не хотите продолжать, введите /end для завершения разговора.')
-
-
-def end(update: Update, context: CallbackContext) -> int:
+async def end(update: Update, context: CallbackContext) -> int:
     """
     Завершает общение с ботом и очищает временные данные пользователя.
 
@@ -85,12 +94,12 @@ def end(update: Update, context: CallbackContext) -> int:
     if user_id in user_data:
         del user_data[user_id]
 
-    update.message.reply_text('Спасибо за обращение! Если у Вас возникнут дополнительные вопросы или потребуется помощь, пожалуйста, '
+    await update.message.reply_text('Спасибо за обращение! Если у Вас возникнут дополнительные вопросы или потребуется помощь, пожалуйста, '
                               'запустите бот заново из меню или введите /start.')
     return ConversationHandler.END
 
 
-def handle_user_name_input(update: Update, context: CallbackContext) -> int:
+async def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает введенное имя пользователя.
 
@@ -106,15 +115,12 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
 
     # Проверка на команду "end"
     if name.lower() == 'end':
-        return end(update, context)
-
-    # Отменяем задачу, если пользователь ввел имя
-    context.job_queue.stop()
+        return await end(update, context)
 
     name_parts = name.split()
 
     if len(name_parts) < 2:
-        update.message.reply_text('Пожалуйста, напишите полное имя, а затем фамилию:')
+        await update.message.reply_text('Пожалуйста, напишите полное имя, а затем фамилию:')
         return NAME
 
     name_upper = name.upper()
@@ -123,7 +129,7 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
     employees = get_employees_db(name_upper)
 
     if not employees:
-        update.message.reply_text('Пожалуйста, проверьте и введите свои данные правильно. Всего доброго.')
+        await update.message.reply_text('Пожалуйста, проверьте и введите свои данные правильно. Всего доброго.')
         logging.warning(f"Пользователь {user_id} не найден в списке сотрудников.")
         return ConversationHandler.END
     
@@ -133,12 +139,17 @@ def handle_user_name_input(update: Update, context: CallbackContext) -> int:
 
     # Генерация кода подтверждения
     code = random.randint(1000, 9999)
-    user_data[user_id] = {'name': name, 'chat_id': user_id, 'code': code} 
+
+    # Получаем полное имя из БД сотрудников
+    full_name_from_db = employees[1]  # "ТИМОНИН РОМАН ЮРЬЕВИЧ"
+    first_name = get_first_name_from_full(full_name_from_db)  # "Роман"
+
+    user_data[user_id] = {'name': first_name, 'chat_id': user_id, 'code': code}
 
     # Отправка кода на электронную почту
     send_code_to_email(email, code)
 
-    update.message.reply_text('На Вашу электронную почту был направлен 4-значный код. Пожалуйста, введите его:')
+    await update.message.reply_text('На Вашу электронную почту был направлен 4-значный код. Пожалуйста, введите его:')
     return CODE
 
  
@@ -152,7 +163,7 @@ def is_valid_code(code: str) -> bool:
     return code.isdigit() and len(code) == 4   
 
 
-def code_verification(update: Update, context: CallbackContext) -> int:
+async def code_verification(update: Update, context: CallbackContext) -> int:
     """
     Проверяет введенный код подтверждения.
 
@@ -168,17 +179,17 @@ def code_verification(update: Update, context: CallbackContext) -> int:
     logging.info(f"Пользователь {user_id} ввел код: {from_user_code}")
     
     if not is_valid_code(from_user_code):
-        update.message.reply_text('Пожалуйста, введите корректный код (4 цифры):')
+        await update.message.reply_text('Пожалуйста, введите корректный код (4 цифры):')
         return CODE
     
     user_code = int(from_user_code)
 
     if user_data[user_id]['code'] != user_code:
-        update.message.reply_text('К сожалению, введенный вами код неверный. Пожалуйста, проверьте его и введите снова.:')
+        await update.message.reply_text('К сожалению, введенный вами код неверный. Пожалуйста, проверьте его и введите снова.')
         logging.warning(f"Пользователь {user_id} ввел неверный код.")
         return CODE
     
-    update.message.reply_text('Для продолжения введите номер телефона в формате +7 XXXXXXXXXX (12 цифр):')
+    await update.message.reply_text('Для продолжения введите номер телефона в формате +7 XXXXXXXXXX (12 цифр):')
     return PHONE
 
 
@@ -192,7 +203,7 @@ def is_valid_phone(phone: str) -> bool:
     return phone.startswith('+7') and phone[2:].isdigit() and len(phone) == 12
 
 
-def get_phone(update: Update, context: CallbackContext) -> int:
+async def get_phone(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает введенный номер телефона.
 
@@ -208,7 +219,7 @@ def get_phone(update: Update, context: CallbackContext) -> int:
 
     # Проверяем корректность номера телефона
     if not is_valid_phone(phone):
-        update.message.reply_text('Похоже, что номер телефона введен неправильно. Он должен быть в формате +7 XXXXXXXXXX (12 цифр). Попробуйте еще раз.')
+        await update.message.reply_text('Похоже, что номер телефона введен неправильно. Он должен быть в формате +7 XXXXXXXXXX (12 цифр). Попробуйте еще раз.')
         logging.warning(f"Пользователь {user_id} ввел некорректный номер телефона.")
         return PHONE  # Возвращаемся к вводу номера телефона
 
@@ -226,15 +237,15 @@ def get_phone(update: Update, context: CallbackContext) -> int:
     # Обновляем данные в user_data
     user_data[user_id]['phone'] = phone  # Обновляем номер в user_data
 
-    update.message.reply_text('Благодарю Вас за информацию!')
+    await update.message.reply_text('Благодарю Вас за информацию!')
     logging.info(f"Пользователь {user_id} успешно сохранил номер телефона.")
 
     # Переход к выбору типа проблемы
-    show_problem_type_menu(update)
+    await show_problem_type_menu(update)
     return PROBLEM_TYPE  # Возвращаем состояние выбора типа проблемы
 
 
-def handle_confirmation_callback(update: Update, context: CallbackContext) -> int:
+async def handle_confirmation_callback(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает подтверждение номера телефона пользователем.
 
@@ -246,23 +257,23 @@ def handle_confirmation_callback(update: Update, context: CallbackContext) -> in
     :return: Состояние PROBLEM_TYPE, если номер подтвержден, иначе PHONE.
     """
     query = update.callback_query # объект содержит информацию о нажатой кнопке
-    query.answer() # метод отправляет ответ Telegram, подтверждая, что бот обработал нажатие кнопки. Это также закрывает всплывающее окно, если оно было открыто
+    await query.answer() # метод отправляет ответ Telegram, подтверждая, что бот обработал нажатие кнопки. Это также закрывает всплывающее окно, если оно было открыто
     user_id = query.message.chat.id
     existing_phone = user_data[user_id]['phone']
 
     if query.data == 'confirm_yes':
         logging.info(f"Пользователь {user_id} подтвердил телефон: {existing_phone}.")
         # Если подтвержден номер, продолжаем к выбору типа проблемы
-        show_problem_type_menu(update)
+        await show_problem_type_menu(update)
         return PROBLEM_TYPE
     
     elif query.data == 'confirm_no':
         logging.info(f"Пользователь {user_id} отклонил подтверждение телефона.")
-        query.edit_message_text(text='Пожалуйста, введите номер телефона для связи, в формате +7 XXXXXXXXXX (12 цифр).')
+        await query.edit_message_text(text='Пожалуйста, введите номер телефона для связи, в формате +7 XXXXXXXXXX (12 цифр).')
         return PHONE
     
 
-def show_problem_type_menu(update: Update, text: str = 'Выберите категорию вашей проблемы:'):
+async def show_problem_type_menu(update: Update, text: str = 'Выберите категорию вашей проблемы:'):
     """
     Отображает меню выбора типа проблемы.
 
@@ -282,14 +293,14 @@ def show_problem_type_menu(update: Update, text: str = 'Выберите кат�
 
     # Если объект update содержит сообщение (то есть это обычное сообщение от пользователя), то бот отправляет текст с клавиатурой в ответ на это сообщение
     if hasattr(update, 'message') and update.message:
-        update.message.reply_text(text, reply_markup=reply_markup)
+        await update.message.reply_text(text, reply_markup=reply_markup)
 
     # Если объект update содержит обратный вызов (то есть пользователь нажал на кнопку), бот редактирует предыдущее сообщение, изменяя его текст и добавляя клавиатуру.
     elif hasattr(update, 'callback_query') and update.callback_query:
-        update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+        await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
 
 
-def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
+async def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
     """
     Отображает меню выбора подкатегории проблемы.
 
@@ -344,13 +355,19 @@ def show_sub_problem_type_menu(update: Update, context: CallbackContext) -> int:
     keyboard.append([InlineKeyboardButton("Назад", callback_data='back_to_menu')])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.callback_query.edit_message_text('Выберите подкатегорию проблемы:', reply_markup=reply_markup)
+    # Обработка редактирования сообщения с обработкой ошибки "Message is not modified"
+    try:
+        await update.callback_query.edit_message_text('Выберите подкатегорию проблемы:', reply_markup=reply_markup)
+    except BadRequest as e:
+        if 'Message is not modified' not in str(e):
+            raise
+        # Если сообщение не изменилось, просто продолжаем
+        logging.debug(f"Сообщение уже имело это содержимое для пользователя {user_id}")
 
-    context.job_queue.run_once(send_notification, 300, context=user_id)
     return SUB_PROBLEM_TYPE
 
 
-def handle_back(update: Update, context: CallbackContext) -> int:
+async def handle_back(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает нажатие кнопки "Назад" в меню выбора проблемы.
 
@@ -368,11 +385,11 @@ def handle_back(update: Update, context: CallbackContext) -> int:
     user_data[user_id].pop('sub_problem_type', None)
 
     # Возврат к выбору
-    show_problem_type_menu(update)
+    await show_problem_type_menu(update)
     return PROBLEM_TYPE
 
 
-def get_problem_type(update: Update, context: CallbackContext) -> int:
+async def get_problem_type(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает выбор типа проблемы пользователем.
 
@@ -383,18 +400,18 @@ def get_problem_type(update: Update, context: CallbackContext) -> int:
     :return: Состояние SUB_PROBLEM_TYPE.
     """
     query = update.callback_query
-    query.answer()
+    await query.answer()
     user_id = query.message.chat.id
     problem_type = query.data
     user_data[user_id]['problem_type'] = problem_type
 
     logging.info(f"Пользователь {user_id} выбрал тип проблемы: {problem_type}")
 
-    show_sub_problem_type_menu(update, context)
+    await show_sub_problem_type_menu(update, context)
     return SUB_PROBLEM_TYPE
 
 
-def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
+async def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает выбор подкатегории проблемы пользователем.
 
@@ -407,34 +424,41 @@ def get_sub_problem_type(update: Update, context: CallbackContext) -> int:
     :return: Состояние ANYDESK, TEXT_DESCRIPTION или ConversationHandler.END.
     """
     query = update.callback_query
-    query.answer()
+    await query.answer()
     user_id = query.message.chat.id
     sub_problem_type = query.data
     user_data[user_id]['sub_problem_type'] = sub_problem_type
 
     logging.info(f"Пользователь {user_id} выбрал подкатегорию проблемы: {sub_problem_type}")
 
-    if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
-        query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»):')
-        return ANYDESK
+    try:
+        if sub_problem_type in ["Настройка удаленного доступа", "Не работает удаленный доступ"]:
+            await query.edit_message_text(text='Пожалуйста, введите Ваш код AnyDesk (9 или 10 символов после фразы «Это рабочее место»):')
+            return ANYDESK
+        
+        elif sub_problem_type in ['Другое', 'Выдача доступа']:
+            await query.edit_message_text(text='Пожалуйста, опишите проблему в свободной форме:')
+            return TEXT_DESCRIPTION
+
+        # Добавляем chat_id в данные, которые будут отправлены
+        user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
+
+        send_data_to_support_channel(user_data[user_id])
+
+        del user_data[user_id]
+
+        await query.edit_message_text(text='Данные успешно отправлены в техническую поддержку. '
+                                'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
+        return ConversationHandler.END
     
-    elif sub_problem_type in ['Другое', 'Выдача доступа']:
-        query.edit_message_text(text='Пожалуйста, опишите проблему в свободной форме:')
-        return TEXT_DESCRIPTION
-
-    # Добавляем chat_id в данные, которые будут отправлены
-    user_data[user_id]['chat_id'] = user_id  # Убедитесь, что chat_id сохранен
-
-    send_data_to_support_channel(user_data[user_id])
-
-    del user_data[user_id]
-
-    query.edit_message_text(text='Данные успешно отправлены в техническую поддержку. '
-                            'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
-    return ConversationHandler.END
+    except BadRequest as e:
+        if 'Message is not modified' in str(e):
+            logging.warning(f"Сообщение уже имело это содержимое для пользователя {user_id}")
+            return context.user_data.get('current_state', SUB_PROBLEM_TYPE)
+        raise
 
 
-def get_anydesk_number(update: Update, context: CallbackContext) -> int:
+async def get_anydesk_number(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает введенный номер AnyDesk.
 
@@ -455,12 +479,12 @@ def get_anydesk_number(update: Update, context: CallbackContext) -> int:
 
     del user_data[user_id]
 
-    update.message.reply_text('Данные успешно отправлены в техническую поддержку. '
+    await update.message.reply_text('Данные успешно отправлены в техническую поддержку. '
                               'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
 
 
-def handle_text_description(update: Update, context: CallbackContext) -> int:
+async def handle_text_description(update: Update, context: CallbackContext) -> int:
     """
     Обрабатывает введенное текстовое описание проблемы.
 
@@ -481,7 +505,7 @@ def handle_text_description(update: Update, context: CallbackContext) -> int:
 
     del user_data[user_id]
     
-    update.message.reply_text('Данные успешно отправлены в техническую поддержку. '
+    await update.message.reply_text('Данные успешно отправлены в техническую поддержку. '
                               'В ближайшее время коллеги свяжутся с Вами для решения проблемы.')
     return ConversationHandler.END
     
