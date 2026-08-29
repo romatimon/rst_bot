@@ -2,23 +2,25 @@ version: '3.8'
 
 services:
   bot:
-    image: rtimonin569/rst_bot:latest
+    image: rtimonin569/rst_bot:${IMAGE_TAG:-latest}
     container_name: rst_bot_container
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      - TELEGRAM_API_BASE_URL=https://api.telegram.org
-      - PYTHONUNBUFFERED=1
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      TARGET_CHAT_ID: ${TARGET_CHAT_ID}
+      FROM_EMAIL: ${FROM_EMAIL}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EXCEL_PATH: /data/phonebook.xlsx
+      PYTHONUNBUFFERED: '1'
     volumes:
-      - timoninbot_data:/data
+      - rst_bot_data:/data
     networks:
       - bot_network
 
 volumes:
-  timoninbot_data:
+  rst_bot_data:
     external: true
-    name: timoninbot_data
+    name: rst_bot_data
 
 networks:
   bot_network:
